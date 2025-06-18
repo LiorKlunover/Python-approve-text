@@ -3,15 +3,24 @@ import customtkinter as ctk
 import os
 import sys
 import keyboard
+import ctypes
+from ctypes import windll
 
 # Import from other modules
 from ui.styles import COLORS, FONTS
 from ui.components import create_rounded_button, create_header_with_buttons
-from services.text_processor import improve_text
+from services.text_processor import improve_text, answer_interview_question
 from services.clipboard_monitor import ClipboardMonitor
 from utils.image_utils import create_drop_shadow, create_gradient_background
 
 import time
+
+# Constants for window styles
+WS_EX_LAYERED = 0x00080000
+WS_EX_TOOLWINDOW = 0x00000080
+LWA_ALPHA = 0x00000002
+GWL_EXSTYLE = -20
+WDA_EXCLUDEFROMCAPTURE = 0x00000011
 
 class TextImproverApp:
     """Main application class for the Text Improver Pro application.
@@ -34,6 +43,12 @@ class TextImproverApp:
         self._set_app_icon()
         self.root.attributes("-topmost", True)
         self.root.overrideredirect(True)
+        
+        # Initialize screen capture visibility state
+        self.screen_capture_visible = False
+        
+        # Make the window invisible to screen capture applications by default
+        self._set_screen_capture_visibility(visible=False)
         
         # Configure the root window with rounded corners
         # Note: We'll use a main frame with rounded corners and a small margin
@@ -60,6 +75,10 @@ class TextImproverApp:
         self._last_shift_time = 0
         self._shift_interval_ms = 400  # Max ms between double presses
         keyboard.on_press(self._handle_shift_double_press)
+        
+        # Initialize clipboard monitor to refresh input text on Ctrl+C, but only when app is visible
+        self.clipboard_monitor = ClipboardMonitor(self._handle_clipboard_update)
+        self.clipboard_monitor.start()
 
         print("✨ Text Improver Pro is running in the background.")
         print("Select text in any application and double-press Shift to improve it.")
@@ -92,6 +111,42 @@ class TextImproverApp:
             # Proceed without icon if not found
             pass
     
+    def _set_screen_capture_visibility(self, visible=False):
+        """Set whether the window is visible to screen capture applications.
+        
+        Args:
+            visible: If True, make window visible to screen capture. If False, make invisible.
+        """
+        try:
+            # Get the window handle
+            hwnd = windll.user32.GetParent(self.root.winfo_id())
+            
+            if visible:
+                # Make window visible to screen capture
+                windll.user32.SetWindowDisplayAffinity(hwnd, 0)  # 0 = Normal window (visible to capture)
+                print("Window is now visible to screen capture applications")
+            else:
+                # Make window invisible to screen capture
+                windll.user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
+                print("Window is now invisible to screen capture applications")
+                
+            # Update the toggle button text if it exists
+            if hasattr(self, 'capture_toggle_button'):
+                text = "🔍 Show in Screen Share" if not visible else "🔒 Hide from Screen Share"
+                self.capture_toggle_button.configure(text=text)
+                
+            # Store current visibility state
+            self.screen_capture_visible = visible
+            
+        except Exception as e:
+            print(f"Could not change screen capture visibility: {e}")
+            
+    def _toggle_screen_capture_visibility(self):
+        """Toggle whether the window is visible to screen capture applications."""
+        # Toggle the current state
+        new_state = not getattr(self, 'screen_capture_visible', False)
+        self._set_screen_capture_visibility(new_state)
+    
     def _create_ui(self):
         """Create all UI components."""
         # Create header with drag functionality
@@ -120,6 +175,9 @@ class TextImproverApp:
         
         # Create the improve button
         self._create_improve_button()
+        
+        # Create the interview question button
+        self._create_interview_button()
         
         # Result display area
         self._create_result_area()
@@ -164,7 +222,7 @@ class TextImproverApp:
             fg_color=COLORS["background"],
             corner_radius=16
         )
-        self.improve_button_frame.pack(pady=10)
+        self.improve_button_frame.pack(pady=(10, 5))
         
         self.improve_button = create_rounded_button(
             self.improve_button_frame,
@@ -172,6 +230,25 @@ class TextImproverApp:
             self.improve_text,
             COLORS,
             FONTS
+        )
+    
+    def _create_interview_button(self):
+        """Create the interview question button."""
+        self.interview_button_frame = ctk.CTkFrame(
+            self.content_frame,
+            fg_color=COLORS["background"],
+            corner_radius=16
+        )
+        self.interview_button_frame.pack(pady=(0, 10))
+        
+        self.interview_button = create_rounded_button(
+            self.interview_button_frame,
+            "🎙️ Answer Interview Question",
+            self.answer_interview_question,
+            COLORS,
+            FONTS,
+            is_secondary=True,
+            width=200
         )
     
     def _create_result_area(self):
@@ -215,14 +292,36 @@ class TextImproverApp:
         )
     
     def _create_footer(self):
-        """Create the footer with information."""
-        self.footer_frame = ctk.CTkFrame(self.main_frame, fg_color=COLORS["background"], height=30, corner_radius=16)
-        self.footer_frame.pack(fill=ctk.X, side=ctk.BOTTOM, padx=15, pady=(0, 10))
+        """Create footer with information."""
+        self.footer_frame = ctk.CTkFrame(self.content_frame, fg_color="transparent")
+        self.footer_frame.pack(fill=ctk.X, pady=(5, 0))
+        
+        # Screen capture visibility toggle button
+        self.capture_toggle_button = create_rounded_button(
+            self.footer_frame,
+            text="🔍 Show in Screen Share",  # Initial state is hidden
+            command=self._toggle_screen_capture_visibility,
+            fg_color=COLORS["secondary"],
+            hover_color=COLORS["secondary_hover"],
+            font=FONTS["small"],
+            corner_radius=10,
+            height=25
+        )
+        self.capture_toggle_button.pack(side=ctk.LEFT, padx=5)
+        
+        # Version info
+        self.version_label = ctk.CTkLabel(
+            self.footer_frame, 
+            text="v1.0.2", 
+            font=FONTS["small"],
+            text_color=COLORS["text_secondary"]
+        )
+        self.version_label.pack(side=ctk.RIGHT, padx=5)
         
         self.footer_text = ctk.CTkLabel(
             self.footer_frame,
-            text="Press Ctrl+Shift+X to activate",
-            fg_color=COLORS["background"],
+            text="Double-press Shift to activate",
+            fg_color="transparent",
             text_color=COLORS["text_light"],
             font=ctk.CTkFont(family=FONTS["text"]["family"], size=8),
             anchor="e"
@@ -254,6 +353,14 @@ class TextImproverApp:
     
     def show_window_at_cursor(self):
         """Show the window near the cursor position with a fade-in effect."""
+        # Check if window is already visible
+        if self.root.winfo_viewable():
+            # Window is already visible, just bring it to front and ensure it's on top
+            self.root.lift()
+            self.root.attributes('-topmost', True)
+            self.root.focus_force()
+            return
+        
         # Get cursor position
         x, y = self.root.winfo_pointerxy()
         
@@ -291,19 +398,51 @@ class TextImproverApp:
         self.root.withdraw()
     
     def _on_hotkey_pressed(self):
-        """Handler for Ctrl+Shift+X: triggers Ctrl+C, waits, then shows app with clipboard text."""
+        """Handler for double-shift: triggers Ctrl+C, waits, then shows app with clipboard text."""
         import pyperclip
         import time
         keyboard.send('ctrl+c')  # Simulate Ctrl+C to copy selection in the currently focused app
         time.sleep(0.6)  # Wait for clipboard to update (increase if needed)
         clipboard_content = pyperclip.paste()
         if clipboard_content.strip():
+            # Always show the app when double-shift is pressed
             self.process_selected_text(clipboard_content)
         else:
-            # Optionally, show the app with a message if nothing is copied
+            # Check if window is already visible before showing
+            if not self.root.winfo_viewable():
+                # Optionally, show the app with a message if nothing is copied
+                self.selected_text_display.delete("1.0", "end")
+                self.selected_text_display.insert("end", "No text was copied. Please select text and try again.")
+                self.show_window_at_cursor()
+            else:
+                # Window is already visible, just update the text and bring to front
+                self.selected_text_display.delete("1.0", "end")
+                self.selected_text_display.insert("end", "No text was copied. Please select text and try again.")
+                self.root.lift()
+                self.root.focus_force()
+    
+    def _handle_clipboard_update(self, text):
+        """Handle clipboard updates from the clipboard monitor.
+        Only update the text if the app is already visible."""
+        # Only process clipboard updates when the app is visible
+        if self.root.winfo_viewable() and text.strip():
+            self.update_input_text(text)
+    
+    def update_input_text(self, text):
+        """Update the input text display with the given text."""
+        if text.strip():
+            # Update the selected text display
             self.selected_text_display.delete("1.0", "end")
-            self.selected_text_display.insert("end", "No text was copied. Please select text and try again.")
-            self.show_window_at_cursor()
+            self.selected_text_display.insert("end", text.strip())
+            self.selected_text = text.strip()
+            
+            # Add a subtle highlight effect to indicate the text was updated
+            original_bg = self.selected_text_display.cget("fg_color")
+            self.selected_text_display.configure(fg_color=COLORS["secondary_hover"])
+            self.root.after(300, lambda: self.selected_text_display.configure(fg_color=original_bg))
+            
+            # Hide the result frame when showing for new text
+            self.result_frame.pack_forget()
     
     def process_selected_text(self, text):
         """Process the selected text from clipboard."""
@@ -317,8 +456,19 @@ class TextImproverApp:
                     self.selected_text_display.delete("1.0", "end")
                     self.selected_text_display.insert("end", self.selected_text)
                     
-                    # Show the window
-                    self.show_window_at_cursor()
+                    # Show the window only if it's not already visible
+                    if not self.root.winfo_viewable():
+                        self.show_window_at_cursor()
+                    else:
+                        # Window is already visible, just update the text and bring to front
+                        self.root.lift()
+                        self.root.attributes('-topmost', True)
+                        self.root.focus_force()
+                        
+                        # Add a subtle highlight effect to indicate the text was updated
+                        original_bg = self.selected_text_display.cget("fg_color")
+                        self.selected_text_display.configure(fg_color=COLORS["secondary_hover"])
+                        self.root.after(300, lambda: self.selected_text_display.configure(fg_color=original_bg))
                     
                     # Hide the result frame when showing for new text
                     self.result_frame.pack_forget()
@@ -365,6 +515,72 @@ class TextImproverApp:
             # Handle any errors
             error_message = f"Error: {str(e)}"
             self.root.after(0, lambda: self._update_result(error_message))
+    
+    def answer_interview_question(self):
+        """Process the text as an interview question and generate an answer."""
+        # Disable the button and show processing state
+        self.interview_button.configure(state="disabled", text="🎙️ Processing...")
+        
+        # Show the result area if it's hidden
+        if not self.result_frame.winfo_ismapped():
+            self.result_frame.pack(fill=ctk.X, pady=15)
+            
+        # Clear and update the result display
+        self.result_display.configure(state="normal")
+        self.result_display.delete("1.0", "end")
+        self.result_display.insert("end", "🎙️ Generating interview answer...")
+        
+        # Add a subtle pulse effect to the button during processing
+        def pulse_button():
+            if self.interview_button.cget('state') == "disabled":
+                current_color = self.interview_button.cget('fg_color')
+                if current_color == COLORS["secondary_hover"]:
+                    self.interview_button.configure(fg_color=COLORS["secondary"])
+                else:
+                    self.interview_button.configure(fg_color=COLORS["secondary_hover"])
+                self.root.after(500, pulse_button)
+        
+        # Start the pulse animation
+        pulse_button()
+        
+        # Call the API in a separate thread
+        import threading
+        threading.Thread(target=self._perform_interview_answer).start()
+    
+    def _perform_interview_answer(self):
+        """Call the API to generate an interview answer."""
+        try:
+            # Get the question text
+            question = self.selected_text
+            
+            # Call the answer_interview_question function from the text_processor module
+            answer = answer_interview_question(question)
+            
+            # Update the result display with the answer
+            self.root.after(0, lambda: self._update_interview_result(answer))
+        except Exception as e:
+            # Handle any errors
+            error_message = f"Error: {str(e)}"
+            self.root.after(0, lambda: self._update_interview_result(error_message))
+            
+    def _update_interview_result(self, result_text):
+        """Update the result display with the interview answer."""
+        # Add a typewriter effect to show the result
+        self.result_display.delete("1.0", "end")
+        
+        # Reset button state
+        self.interview_button.configure(state="normal", text="🎙️ Answer Interview Question")
+        
+        # Apply typewriter effect
+        def typewriter(text, index=0):
+            if index < len(text):
+                self.result_display.insert("end", text[index])
+                self.root.after(10, typewriter, text, index + 1)
+                # Auto-scroll to ensure text is visible
+                self.result_display.see("end")
+        
+        # Start the typewriter effect
+        typewriter(result_text)
     
     def _update_result(self, result_text):
         """Update the result display with the improved text."""

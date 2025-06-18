@@ -2,24 +2,93 @@
 Text processing service for the Text Improver Pro application.
 
 This module provides functionality for improving and shortening text
-using the OpenRouter API with various LLM models.
+using the Google Gemini API and OpenRouter API with various LLM models.
 """
 
+import google.generativeai as genai
 from openai import OpenAI
-import os
-import json
-import time
 
 # Configuration
 API_KEY = "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"
+GOOGLE_API_KEY = "AIzaSyAT51o1Iudt2p7w0BsjcNTv8iugaJ6-YOQ"
 BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "anthropic/claude-3-haiku:beta"  # Default to a reliable model
+DEFAULT_MODEL = "gemini-2.5-flash-preview-05-20"  # Using Gemini 2.5 Flash Preview TTS (available in free tier)
 
-# Initialize the OpenAI client with OpenRouter base URL
-client = OpenAI(
+# Initialize the OpenAI client with OpenRouter base URL (for backup)
+openrouter_client = OpenAI(
     base_url=BASE_URL,
     api_key=API_KEY,
+    default_headers={
+        "HTTP-Referer": "https://text-improver-pro.app",  # Site URL for rankings
+        "X-Title": "Text Improver Pro"  # Site title for rankings
+    }
 )
+
+# Initialize the Google Generative AI client
+genai.configure(api_key=GOOGLE_API_KEY)
+
+
+def answer_interview_question(question, model=DEFAULT_MODEL):
+    """
+    Generate a well-structured, human-like response to an interview question.
+    
+    This function processes interview questions and returns professionally crafted
+    answers that sound natural and conversational, using the specified LLM model.
+    
+    Args:
+        question: The interview question to answer
+        model: The model to use (default)
+        
+    Returns:
+        A well-structured answer to the interview question, or an error message if something went wrong
+    """
+    try:
+        # Check if using Gemini model
+        if "gemini" in model.lower():
+            # Create a Gemini model instance
+            gemini_model = genai.GenerativeModel(model)
+            
+            # Create system prompt and user message
+            system_prompt = "You are a helpful assistant that answers interview questions. "\
+                           "Provide a short and precise answer without any introductory phrases. "\
+                           "Be concise and get straight to the point. "\
+                           "Limit your response to 4-7 sentences when possible. "\
+                           "Start your response directly with the answer."
+            
+            # Generate response using Gemini
+            chat = gemini_model.start_chat(history=[])
+            response = chat.send_message(
+                f"{system_prompt}\n\nPlease answer this question: {question}"
+            )
+            
+            # Return the response text
+            return response.text
+        else:
+            # Fallback to OpenRouter for non-Gemini models
+            response = openrouter_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that answers interview questions. "
+                                   "Provide a short and precise answer without any introductory phrases. "
+                                   "Be concise and get straight to the point. "
+                                   "Limit your response to 4-7 sentences when possible. "
+                                   "Start your response directly with the answer."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Please answer this question: {question}"
+                    }
+                ]
+            )
+            
+            # Validate response
+            return _extract_content_from_response(response)
+    except Exception as e:
+        return _handle_api_error(e)
+
+
 
 def improve_text(text, model=DEFAULT_MODEL):
     """
@@ -27,36 +96,52 @@ def improve_text(text, model=DEFAULT_MODEL):
     
     Args:
         text: The text to improve
-        model: The model to use (default: anthropic/claude-3-haiku:beta)
+        model: The model to use (default)
         
     Returns:
         The improved text, or an error message if something went wrong
     """
     try:
-        # Create completion with the model
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant that improves and shortens text. "
-                               "Provide only the improved text without any introductory phrases like "
-                               "'Here\'s the improved and shortened text:' or similar. "
-                               "Start your response directly with the improved content."
-                },
-                {
-                    "role": "user",
-                    "content": f"Please improve and shorten this text while preserving its meaning: {text}"
-                }
-            ],
-            extra_headers={
-                "HTTP-Referer": "https://text-improver-app.com",
-                "X-Title": "Text Improver Pro"
-            }
-        )
-        
-        # Validate response
-        return _extract_content_from_response(response)
+        # Check if using Gemini model
+        if "gemini" in model.lower():
+            # Create a Gemini model instance
+            gemini_model = genai.GenerativeModel(model)
+            
+            # Create system prompt and user message
+            system_prompt = "You are a helpful assistant that improves and shortens text. "\
+                           "Provide only the improved text without any introductory phrases like "\
+                           "'Here\'s the improved and shortened text:' or similar. "\
+                           "Start your response directly with the improved content."
+            
+            # Generate response using Gemini
+            chat = gemini_model.start_chat(history=[])
+            response = chat.send_message(
+                f"{system_prompt}\n\nPlease improve and shorten this text while preserving its meaning: {text}"
+            )
+            
+            # Return the response text
+            return response.text
+        else:
+            # Fallback to OpenRouter for non-Gemini models
+            response = openrouter_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that improves and shortens text. "
+                                   "Provide only the improved text without any introductory phrases like "
+                                   "'Here\'s the improved and shortened text:' or similar. "
+                                   "Start your response directly with the improved content."
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Please improve and shorten this text while preserving its meaning: {text}"
+                    }
+                ]
+            )
+            
+            # Validate response
+            return _extract_content_from_response(response)
     except Exception as e:
         return _handle_api_error(e)
 
@@ -110,27 +195,13 @@ def improve_text_with_style(text, style="professional", model=DEFAULT_MODEL):
         return _handle_api_error(e)
 
 def _extract_content_from_response(response):
-    """
-    Extract the content from the API response with proper validation.
-    
-    Args:
-        response: The API response object
-        
-    Returns:
-        The extracted content or an error message
-    """
-    # Validate response structure
-    if not response or not hasattr(response, 'choices') or not response.choices:
-        return "Error: No valid response received from the API"
-        
-    if not response.choices[0] or not hasattr(response.choices[0], 'message'):
-        return "Error: Response format unexpected - no message in first choice"
-        
-    if not response.choices[0].message or not hasattr(response.choices[0].message, 'content'):
-        return "Error: Response format unexpected - no content in message"
-        
-    # Return the improved text
-    return response.choices[0].message.content
+    """Extract content from API response."""
+    try:
+        # For OpenRouter responses
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Error extracting content from response: {e}")
+        return "Error processing response from API."
 
 def _handle_api_error(error):
     """

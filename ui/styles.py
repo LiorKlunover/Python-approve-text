@@ -54,32 +54,32 @@ COLORS = {
 FONTS = {
     "title": {
         "family": "Segoe UI",
-        "size": 14,
+        "size": 18,  # Increased from 14
         "weight": "bold"
     },
     "header": {
         "family": "Segoe UI",
-        "size": 11,
+        "size": 14,  # Increased from 11
         "weight": "bold"
     },
     "text": {
         "family": "Segoe UI",
-        "size": 10,
+        "size": 13,  # Increased from 10
         "weight": "normal"
     },
     "button": {
         "family": "Segoe UI",
-        "size": 10,
+        "size": 12,  # Increased from 10
         "weight": "bold"
     },
     "small": {
         "family": "Segoe UI",
-        "size": 8,
+        "size": 10,  # Increased from 8
         "weight": "normal"
     },
     "icon": {
         "family": "Segoe UI",
-        "size": 16,
+        "size": 18,  # Increased from 16
         "weight": "normal"
     }
 }
