@@ -7,12 +7,21 @@ using the Google Gemini API and OpenRouter API with various LLM models.
 
 import google.generativeai as genai
 from openai import OpenAI
+import os
 
-# Configuration
-API_KEY = "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"
-GOOGLE_API_KEY = "AIzaSyAT51o1Iudt2p7w0BsjcNTv8iugaJ6-YOQ"
+# Try to load environment variables if dotenv is available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # If dotenv is not available, we'll use hardcoded values or environment variables
+    pass
+
+# Configuration - use environment variables or fallback to defaults
+API_KEY = os.environ.get("API_KEY", "your_api_key_here")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "your_google_api_key_here")
 BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_MODEL = "gemini-2.5-flash-preview-05-20"  # Using Gemini 2.5 Flash Preview TTS (available in free tier)
+DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gemini-2.5-flash-preview-05-20")
 
 # Initialize the OpenAI client with OpenRouter base URL (for backup)
 openrouter_client = OpenAI(

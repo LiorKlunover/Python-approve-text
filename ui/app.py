@@ -216,14 +216,45 @@ class TextImproverApp:
         self.selected_text_display.pack(fill=ctk.X, padx=1, pady=1)
     
     def _create_improve_button(self):
-        """Create the improve button with modern styling."""
+        """Create the improve button with modern styling and tone dropdown."""
+        # Create a frame to hold both the dropdown and button
         self.improve_button_frame = ctk.CTkFrame(
             self.content_frame,
             fg_color=COLORS["background"],
             corner_radius=16
         )
-        self.improve_button_frame.pack(pady=(10, 5))
+        self.improve_button_frame.pack(pady=(10, 5), fill=ctk.X)
         
+        # Create a label for the tone dropdown
+        self.tone_label = ctk.CTkLabel(
+            self.improve_button_frame,
+            text="Tone:",
+            text_color=COLORS["text"],
+            font=ctk.CTkFont(family=FONTS["text"]["family"], size=FONTS["text"]["size"]-2)
+        )
+        self.tone_label.pack(side=ctk.LEFT, padx=(10, 5))
+        
+        # Create the tone dropdown
+        self.tone_var = ctk.StringVar(value="Professional")
+        self.tone_options = ["Professional", "Casual", "Formal", "Friendly", "Academic", "Creative", "Humorous"]
+        
+        self.tone_dropdown = ctk.CTkOptionMenu(
+            self.improve_button_frame,
+            values=self.tone_options,
+            variable=self.tone_var,
+            width=120,
+            fg_color=COLORS["secondary"],
+            button_color=COLORS["primary"],
+            button_hover_color=COLORS["primary_dark"],
+            text_color=COLORS["text"],
+            dropdown_fg_color=COLORS["secondary"],
+            dropdown_hover_color=COLORS["primary_light"],
+            dropdown_text_color=COLORS["text"],
+            font=ctk.CTkFont(family=FONTS["text"]["family"], size=FONTS["text"]["size"]-2)
+        )
+        self.tone_dropdown.pack(side=ctk.LEFT, padx=(0, 10))
+        
+        # Create the improve button
         self.improve_button = create_rounded_button(
             self.improve_button_frame,
             "✨ Improve Text",
@@ -231,6 +262,7 @@ class TextImproverApp:
             COLORS,
             FONTS
         )
+        self.improve_button.pack(side=ctk.RIGHT, padx=10)
     
     def _create_interview_button(self):
         """Create the interview question button."""
@@ -301,10 +333,9 @@ class TextImproverApp:
             self.footer_frame,
             text="🔍 Show in Screen Share",  # Initial state is hidden
             command=self._toggle_screen_capture_visibility,
-            fg_color=COLORS["secondary"],
-            hover_color=COLORS["secondary_hover"],
-            font=FONTS["small"],
-            corner_radius=10,
+            colors=COLORS,
+            fonts=FONTS,
+            is_secondary=True,
             height=25
         )
         self.capture_toggle_button.pack(side=ctk.LEFT, padx=5)
@@ -313,8 +344,8 @@ class TextImproverApp:
         self.version_label = ctk.CTkLabel(
             self.footer_frame, 
             text="v1.0.2", 
-            font=FONTS["small"],
-            text_color=COLORS["text_secondary"]
+            font=ctk.CTkFont(family=FONTS["small"]["family"], size=FONTS["small"]["size"]),
+            text_color=COLORS["text_light"]
         )
         self.version_label.pack(side=ctk.RIGHT, padx=5)
         
@@ -503,11 +534,13 @@ class TextImproverApp:
     def _perform_improvement(self):
         """Call the API to improve the text."""
         try:
-            # Get the selected text
+            # Get the selected text and tone
             text_to_improve = self.selected_text
+            selected_tone = self.tone_var.get()
             
-            # Call the improve_text function from the text_processor module
-            improved_text = improve_text(text_to_improve)
+            # Call the run_agent function from the agent module with the selected tone
+            from services.agent import run_agent
+            improved_text = run_agent(text_to_improve, tone=selected_tone)
             
             # Update the result display with the improved text
             self.root.after(0, lambda: self._update_result(improved_text))
