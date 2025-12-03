@@ -1,6 +1,7 @@
 # Text Improver Pro
 
 A modern application that improves and shortens text using AI. Select text in any application, press Ctrl+Shift+X, and get improved text instantly.
+<img width="420" height="657" alt="image" src="https://github.com/user-attachments/assets/1993c25f-f529-4821-bb1e-8263a2e0388d" />
 
 ## Features
 
