@@ -12,6 +12,7 @@ from ui.components import create_rounded_button, create_header_with_buttons
 from services.text_processor import improve_text, answer_interview_question
 from services.clipboard_monitor import ClipboardMonitor
 from utils.image_utils import create_drop_shadow, create_gradient_background
+from ui.pop_up_text_window import show_popup_text
 
 import time
 
@@ -288,7 +289,7 @@ class TextImproverApp:
         self.result_frame = ctk.CTkFrame(self.content_frame, fg_color=COLORS["background"], corner_radius=16)
         self.result_frame.pack(fill=ctk.X, pady=15)
         self.result_frame.pack_forget()  # Hide initially
-        
+
         self.result_label = ctk.CTkLabel(
             self.result_frame, 
             text="Improved Text", 
@@ -299,6 +300,35 @@ class TextImproverApp:
         )
         self.result_label.pack(fill=ctk.X, pady=(0, 10))
         
+        # Create a frame for the buttons and place it above the text area
+        self.button_frame = ctk.CTkFrame(self.result_frame, fg_color=COLORS["background"], corner_radius=16)
+        self.button_frame.pack(fill=ctk.X, pady=(0, 10))
+
+        # Create a frame for the buttons to align them properly
+        self.buttons_container = ctk.CTkFrame(self.button_frame, fg_color="transparent")
+        self.buttons_container.pack(side=ctk.RIGHT, padx=10, pady=10)
+
+        self.copy_button = create_rounded_button(
+            self.buttons_container,
+            "📋 Copy to Clipboard",
+            self.copy_to_clipboard,
+            COLORS,
+            FONTS,
+            is_secondary=False  # Changed to False to use primary (purple) color
+        )
+        self.copy_button.pack(side=ctk.LEFT, padx=(0, 5))
+
+        # Add a button to show the result in a popup window
+        self.popup_button = create_rounded_button(
+            self.buttons_container,
+            "🔍 Show in Popup",
+            self.show_result_in_popup,
+            COLORS,
+            FONTS,
+            is_secondary=True
+        )
+        self.popup_button.pack(side=ctk.LEFT, padx=(5, 0))
+
         self.result_display = ctk.CTkTextbox(
             self.result_frame, 
             height=180, 
@@ -308,20 +338,7 @@ class TextImproverApp:
             corner_radius=16,
             wrap="word"
         )
-        self.result_display.pack(fill=ctk.X, padx=1, pady=1)
-        
-        # Add a copy button
-        self.button_frame = ctk.CTkFrame(self.result_frame, fg_color=COLORS["background"], corner_radius=16)
-        self.button_frame.pack(fill=ctk.X, pady=(0, 10))
-        
-        self.copy_button = create_rounded_button(
-            self.button_frame,
-            "📋 Copy to Clipboard",
-            self.copy_to_clipboard,
-            COLORS,
-            FONTS,
-            is_secondary=False  # Changed to False to use primary (purple) color
-        )
+        self.result_display.pack(fill=ctk.X, padx=1, pady=(0, 1))
     
     def _create_footer(self):
         """Create footer with information."""
@@ -670,3 +687,9 @@ class TextImproverApp:
             
             # Start animation after a brief delay
             self.root.after(200, animate_button)
+    
+    def show_result_in_popup(self):
+        """Show the result text in a popup window."""
+        result_text = self.result_display.get("1.0", "end").strip()
+        if result_text:
+            show_popup_text(self.root, "Text Improver Result", result_text)
